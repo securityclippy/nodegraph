@@ -53,14 +53,12 @@ func (n *Node) Link(relationship string, n2 *Node, db *dgo.Dgraph) error {
 		return fmt.Errorf("n2 does not have uid.  Cannot create link")
 	}
 
-	in := []byte(fmt.Sprintf(`{"uid": %q, %q: {"uid": %q}}`, n.UID, relationship, n2.UID))
-	log.Info(string(in))
-	raw := map[string]interface{}{}
-	err := json.Unmarshal(in, &raw)
-	if err != nil {
-		return err
+	link := map[string]interface{}{
+		"uid": n.UID,
+		relationship: map[string]string{"uid": n2.UID},
 	}
-	out, err := json.Marshal(raw)
+
+	out, err := json.Marshal(link)
 	if err != nil {
 		return err
 	}
