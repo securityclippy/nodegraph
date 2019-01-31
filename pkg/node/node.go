@@ -53,24 +53,46 @@ func (n *Node) Link(relationship string, n2 *Node, db *dgo.Dgraph) error {
 		return fmt.Errorf("n2 does not have uid.  Cannot create link")
 	}
 
-	link := map[string]interface{}{
+	edge := map[string]interface{}{
 		"uid": n.UID,
 		relationship: map[string]string{"uid": n2.UID},
 	}
 
-	out, err := json.Marshal(link)
+	out, err := json.Marshal(edge)
 	if err != nil {
 		return err
 	}
-	resp, err := txn.Mutate(context.Background(), &api.Mutation{
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
 		SetJson: out,
 	})
 	if err != nil {
 		return err
 	}
-	log.Infof("resp out: %+v", resp)
 	return nil
 }
+
+
+// LinkAndUpsert links n to n2 via the relationship and upserts n2 if it does not exist
+func (n *Node) UpsertAndLink(relationship string, n2 *Node, db *dgo.Dgraph) (*Node, *Node, error) {
+	existingN2, err := n2.Existing(db)
+	if err != nil {
+		return n, existingN2, err
+	}
+	if existingN2 == nil {
+		n2, err = n2.Upsert(db)
+		if err != nil {
+			return n, nil, err
+		}
+	}
+
+	err = n.Link(relationship, n2, db)
+	if err != nil {
+		return n, n2, err
+	}
+
+	return n, n2, nil
+}
+
 
 func (n *Node) LinkMultiple(relationship string, nodes []*Node, db *dgo.Dgraph) []*error {
 	txn := db.NewTxn()
@@ -137,7 +159,6 @@ func (n *Node) Existing(db *dgo.Dgraph) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("resp: %s", string(resp.GetJson()))
 	err = json.Unmarshal(resp.GetJson(), &decode)
 	if err != nil {
 		log.Error(err)
@@ -169,3 +190,5 @@ func (n *Node) Upsert(db *dgo.Dgraph) (*Node, error) {
 	}
 	return existing, nil
 }
+
+
