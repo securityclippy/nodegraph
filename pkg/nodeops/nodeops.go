@@ -32,12 +32,12 @@ func BulkAddNodes(nodes []*node.Node, db *dgo.Dgraph) (map[string]string, error)
 	return resp.Uids, nil
 }
 
-func BulkLink(rootNode *node.Node, relationship string, childrenUIDS map[string]string, db *dgo.Dgraph) error {
+func BulkLink(rootNode *node.Node, relationship string, childUIDS map[string]string, db *dgo.Dgraph) error {
 	txn := db.NewTxn()
 	defer txn.Discard(context.Background())
 
 	edges := []*edge.Edge{}
-	for _, u := range childrenUIDS {
+	for _, u := range childUIDS {
 		e := edge.New(rootNode.UID, relationship, u)
 		edges = append(edges, &e)
 	}
