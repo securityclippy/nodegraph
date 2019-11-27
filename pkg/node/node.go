@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -62,8 +62,10 @@ func (n *Node) Link(relationship string, n2 *Node, db *dgo.Dgraph) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = txn.Mutate(context.Background(), &api.Mutation{
 		SetJson: out,
+		CommitNow:true,
 	})
 	if err != nil {
 		return err
@@ -73,12 +75,12 @@ func (n *Node) Link(relationship string, n2 *Node, db *dgo.Dgraph) error {
 
 
 // LinkAndUpsert links n to n2 via the relationship and upserts n2 if it does not exist
-func (n *Node) UpsertAndLink(relationship string, n2 *Node, db *dgo.Dgraph) (*Node, *Node, error) {
-	existingN2, err := n2.Existing(db)
+func (n *Node) UpsertAndLink(relationship string, n2 *Node, db *dgo.Dgraph) (node *Node, existingNode *Node, err error) {
+	existingNode, err = n2.Existing(db)
 	if err != nil {
-		return n, existingN2, err
+		return n, existingNode, err
 	}
-	if existingN2 == nil {
+	if existingNode == nil {
 		n2, err = n2.Upsert(db)
 		if err != nil {
 			return n, nil, err
@@ -93,6 +95,12 @@ func (n *Node) UpsertAndLink(relationship string, n2 *Node, db *dgo.Dgraph) (*No
 	return n, n2, nil
 }
 
+
+//func (n *Node) LinkMulti(relationship string, nodes []*Node, db *dgo.Dgraph) error {
+	//for _, n := range nodes {
+		//
+	//}
+//}
 
 func (n *Node) LinkMultiple(relationship string, nodes []*Node, db *dgo.Dgraph) []*error {
 	txn := db.NewTxn()
@@ -128,6 +136,7 @@ func (n *Node) LinkMultiple(relationship string, nodes []*Node, db *dgo.Dgraph) 
 			}
 			_, err = txn.Mutate(context.Background(), &api.Mutation{
 				SetJson: out,
+				CommitNow:true,
 			})
 			if err != nil {
 				errs = append(errs, &err)
@@ -153,19 +162,28 @@ func (n *Node) Existing(db *dgo.Dgraph) (*Node, error) {
 			}
 			}`, n.Type, n.Name)
 	var decode struct {
-		nodes []*Node
+		Node []struct{
+			Name string `json:"name"`
+			UID string `json:"uid"`
+		}
 	}
+
 	resp, err := txn.Query(context.Background(), q)
 	if err != nil {
 		return nil, err
 	}
 	err = json.Unmarshal(resp.GetJson(), &decode)
+
 	if err != nil {
 		log.Error(err)
 	}
-	if len(decode.nodes) > 0 {
+	if len(decode.Node) > 0 {
 
-		return decode.nodes[0], nil
+		n := &Node{
+			Name: decode.Node[0].Name,
+			UID: decode.Node[0].UID,
+		}
+		return n, nil
 	}
 	return nil, nil
 }
@@ -184,11 +202,39 @@ func (n *Node) Upsert(db *dgo.Dgraph) (*Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		resp, err := txn.Mutate(context.Background(), &api.Mutation{SetJson: out})
-		n.UID = resp.Uids["blank-0"]
+		resp, err := txn.Mutate(context.Background(), &api.Mutation{SetJson: out, CommitNow:true})
+		for _, v := range resp.GetUids() {
+			n.UID = v
+		}
 		return n, nil
 	}
 	return existing, nil
 }
 
+func (n *Node) JSONString() string {
+	js, _ := json.MarshalIndent(n, "", "  ")
+	return string(js)
+}
 
+func (n *Node) Set(db *dgo.Dgraph) (*Node, error) {
+	out, err := json.Marshal(n)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx := context.Background()
+	txn := db.NewTxn()
+	defer txn.Discard(ctx)
+
+	resp, err := txn.Mutate(context.Background(), &api.Mutation{SetJson:out, CommitNow:true})
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, v := range resp.GetUids() {
+		n.UID = v
+	}
+
+	return n, nil
+}

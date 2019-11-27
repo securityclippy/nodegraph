@@ -3,30 +3,36 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/securityclippy/nodegraph/pkg/nodeops"
 
 	//"fmt"
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
+
 	"github.com/securityclippy/nodegraph/pkg/client"
 	"github.com/securityclippy/nodegraph/pkg/node"
-	"github.com/securityclippy/nodegraph/pkg/nodeops"
-	"log"
+	//"github.com/securityclippy/nodegraph/pkg/nodeops"
 	"os"
 	"strings"
 	"context"
+	log "github.com/sirupsen/logrus"
 )
 
 
 var schema = `
-			user: string @index(term) .
-			role: string @index(term) .
-			group: string @index(term) .
-			permission: string @index(term) .
-			iamrole: string @index(term) .
-			type: string @index(term) .
-			name: string @index(term) .
+			user: string @index(term,fulltext) .
+			role: string @index(term,fulltext) .
+			group: string @index(term,fulltext) .
+			permission: string @index(term,fulltext) .
+			iamrole: string @index(term,fulltext) .
+			type: string @index(term,fulltext) .
+			name: string @index(term,fulltext) .
 			policy: uid @reverse .
 			allows: uid @reverse .
+			attached: uid @reverse .
+			grants: uid @reverse .
+			member: uid @reverse .
+			resource: uid @reverse .
 `
 
 func ReadPerms() []string {
@@ -67,8 +73,99 @@ func SetSchema(schema string, db *dgo.Dgraph) error {
 
 }
 
+func AddRole(db *dgo.Dgraph) error {
+	ngPolicy, err := node.New("policy", "s3-policy").Existing(db)
+	if err != nil {
+		return err
+	}
+
+	n, err := node.New("iamrole", "ec2-role").Upsert(db)
+	if err != nil {
+		return err
+	}
+
+	return n.Link("attached", ngPolicy, db)
+}
+
+func addAdminPolicy(db *dgo.Dgraph) (*node.Node, error) {
+
+	pol, err := node.New("policy", "adminPolicy").Upsert(db)
+	if err != nil {
+		return nil, err
+	}
+
+	s3Star, err := node.New("action", "s3:*").Existing(db)
+	if err != nil {
+		return nil, err
+	}
+
+	iamStar, err := node.New("action", "iam:*").Upsert(db)
+	if err != nil {
+		return nil, err
+	}
+
+	err = pol.Link("attached", s3Star, db)
+	if err != nil {
+		return nil, err
+	}
+	err = pol.Link("attached", iamStar, db)
+	if err != nil {
+		return nil, err
+	}
+
+	return pol, nil
+
+}
+
+func addAdminUser(db *dgo.Dgraph) (*node.Node, error) {
+
+	user, err := node.New("user", "adminUser").Upsert(db)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func addAdminGroup(db *dgo.Dgraph) (*node.Node, error) {
+	adminGroup, err := node.New("group", "adminGroup").Upsert(db)
+	if err != nil {
+		return nil, err
+	}
+
+	return adminGroup, nil
+}
+
+
+
+
+
+
+
+func AddPolicy(db *dgo.Dgraph) error {
+	s3Star, err := node.New("action", "s3:*").Existing(db)
+	if err != nil {
+		return err
+	}
+
+	n, err := node.New("policy", "s3-policy").Upsert(db)
+
+	if err != nil {
+		return err
+	}
+
+	err = n.Link("grants", s3Star, db)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
-	db := client.NewDgraphClient("")
+	db, err := client.NewDgraphClient("")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	dropDB(db)
 
@@ -93,7 +190,8 @@ func main() {
 		}
 	}
 	for k, v := range permRootMap {
-		n1, _ := node.New("action", k).Upsert(db)
+		//n1, err := node.New("action", k).Upsert(db)
+		_, err = node.New("action", k).Upsert(db)
 		nodes := []*node.Node{}
 		for _, val := range v {
 			n := node.New("action", val)
@@ -103,13 +201,56 @@ func main() {
 		if err != nil {
 			log.Println(err)
 		}
-		err = nodeops.BulkLink(n1, "allows", uids, db)
-		if err != nil {
-			log.Println(err)
-		}
-		log.Printf("uploaded %d nodes", len(uids))
+		//err = nodeops.BulkLink(n1, "allows", uids, db)
+		//if err != nil {
+			//log.Println(err)
+
+			log.Printf("uploaded %d nodes", len(uids))
+		//}
 	}
+
+	/*
+	err = AddPolicy(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = AddRole(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	adminPol, err := addAdminPolicy(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, _, err = adminPol.UpsertAndLink("allows", node.New("resource", "s3-bucket"), db)
+
+	adminUser, err := addAdminUser(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	adminGroup, err := addAdminGroup(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = adminGroup.Link("attached", adminPol, db)
+	if err != nil {
+		log.Fatalf("attached: %s", err.Error())
+	}
+
+	err = adminGroup.Link("member", adminUser, db)
+	if err != nil {
+		log.Fatalf("addMember: %s", err.Error())
+	}
+
+	_, _, err = adminGroup.UpsertAndLink("member", node.New("user", "adminUser2"), db)
+	if err != nil {
+		log.Fatalf("addMember: %s", err.Error())
+	}
+	 */
+
 }
-
-
-

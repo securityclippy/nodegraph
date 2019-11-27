@@ -1,8 +1,8 @@
 package nodeops
 
 import (
-	"github.com/dgraph-io/dgo"
-	"github.com/dgraph-io/dgo/protos/api"
+	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/securityclippy/nodegraph/pkg/edge"
 	"github.com/securityclippy/nodegraph/pkg/node"
 	"context"
