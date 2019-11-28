@@ -11,11 +11,11 @@ import (
 
 	"github.com/securityclippy/nodegraph/pkg/client"
 	"github.com/securityclippy/nodegraph/pkg/node"
+	"context"
+	log "github.com/sirupsen/logrus"
 	//"github.com/securityclippy/nodegraph/pkg/nodeops"
 	"os"
 	"strings"
-	"context"
-	log "github.com/sirupsen/logrus"
 )
 
 
@@ -27,13 +27,12 @@ var schema = `
 			iamrole: string @index(term,fulltext) .
 			type: string @index(term,fulltext) .
 			name: string @index(term,fulltext) .
-			policy: uid @reverse .
-			allows: uid @reverse .
-			attached: uid @reverse .
-			grants: uid @reverse .
-			member: uid @reverse .
-			resource: uid @reverse .
-`
+			policy: [uid] @reverse .
+			allows: [uid] @reverse .
+			attached: [uid] @reverse .
+			grants: [uid] @reverse .
+			member: [uid] @reverse .
+			resource: [uid] @reverse . `
 
 func ReadPerms() []string {
 	perms := []string{}
@@ -190,23 +189,35 @@ func main() {
 		}
 	}
 	for k, v := range permRootMap {
-		//n1, err := node.New("action", k).Upsert(db)
-		_, err = node.New("action", k).Upsert(db)
+		n1, err := node.New("action", k).Upsert(db)
+		if err != nil {
+			log.Error(err)
+		}
+		//fmt.Printf("N1: %+v", n1)
 		nodes := []*node.Node{}
 		for _, val := range v {
-			n := node.New("action", val)
-			nodes = append(nodes, n)
+			nodes = append(nodes, node.New("action", val))
+			//n2, err := node.New("action", val).Upsert(db)
+
+			//fmt.Printf("n1(%s) -> %s -> n2(%s)\n", n1.UID, "allows",  n2.UID)
+			//if err != nil {
+				//log.Error(err)
+			//}
+			//err = n1.Link("allows", n2, db)
+			//if err != nil {
+				//log.Error(err)
+			//}
 		}
 		uids, err := nodeops.BulkAddNodes(nodes, db)
 		if err != nil {
 			log.Println(err)
 		}
-		//err = nodeops.BulkLink(n1, "allows", uids, db)
-		//if err != nil {
-			//log.Println(err)
-
-			log.Printf("uploaded %d nodes", len(uids))
-		//}
+		err = nodeops.BulkLink(n1, "allows", uids, db)
+		if err != nil {
+			log.Println(err)
+//
+		}
+		log.Printf("uploaded %d nodes", len(uids))
 	}
 
 	/*

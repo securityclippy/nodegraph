@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/securityclippy/nodegraph/pkg/edge"
 	"time"
 
 	"github.com/dgraph-io/dgo/v2"
@@ -53,12 +54,14 @@ func (n *Node) Link(relationship string, n2 *Node, db *dgo.Dgraph) error {
 		return fmt.Errorf("n2 does not have uid.  Cannot create link")
 	}
 
-	edge := map[string]interface{}{
-		"uid": n.UID,
-		relationship: map[string]string{"uid": n2.UID},
-	}
+	//edge := map[string]interface{}{
+		//"uid": n.UID,
+		//relationship: map[string]string{"uid": n2.UID},
+	//}
 
-	out, err := json.Marshal(edge)
+	e := edge.New(n.UID, relationship, n2.UID)
+
+	out, err := json.Marshal(e)
 	if err != nil {
 		return err
 	}

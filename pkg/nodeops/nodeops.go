@@ -1,12 +1,12 @@
 package nodeops
 
 import (
+	"context"
+	"encoding/json"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/securityclippy/nodegraph/pkg/edge"
 	"github.com/securityclippy/nodegraph/pkg/node"
-	"context"
-	"encoding/json"
 )
 
 func BulkAddNodes(nodes []*node.Node, db *dgo.Dgraph) (map[string]string, error) {
@@ -25,11 +25,13 @@ func BulkAddNodes(nodes []*node.Node, db *dgo.Dgraph) (map[string]string, error)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := txn.Mutate(context.Background(), &api.Mutation{SetJson: out})
+
+	resp, err := txn.Mutate(context.Background(), &api.Mutation{SetJson: out, CommitNow:true})
 	if err != nil {
 		return nil, err
 	}
-	return resp.Uids, nil
+
+	return resp.GetUids(), nil
 }
 
 func BulkLink(rootNode *node.Node, relationship string, childUIDS map[string]string, db *dgo.Dgraph) error {
@@ -45,7 +47,7 @@ func BulkLink(rootNode *node.Node, relationship string, childUIDS map[string]str
 	if err != nil {
 		return err
 	}
-	_, err = txn.Mutate(context.Background(), &api.Mutation{SetJson: out})
+	_, err = txn.Mutate(context.Background(), &api.Mutation{SetJson: out, CommitNow:true})
 	if err != nil {
 		return err
 	}
