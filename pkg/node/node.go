@@ -32,15 +32,25 @@ type Node struct {
 	Updated time.Time `json:"updated"`
 }
 
-func New(nodeType, name string) *Node {
-	node := Node{
+func New(nodeType, name, uid string) *Node {
+	if uid == "" {
+		return 	&Node{
+			Type:    nodeType,
+			Name:    name,
+			Created: time.Now(),
+			Updated: time.Now(),
+		}
+	}
+
+	return &Node{
+		UID: uid,
 		Type:    nodeType,
 		Name:    name,
 		Created: time.Now(),
 		Updated: time.Now(),
 	}
-	return &node
 }
+
 
 func (n *Node) Link(relationship string, n2 *Node, db *dgo.Dgraph) error {
 	txn := db.NewTxn()
