@@ -15,27 +15,27 @@ import (
 
 type Node struct {
 	//type of node
-	Type  string   `json:"type"`
+	DType  string   `json:"dgraph.type,omitempty"`
 	//Name node
-	Name  string   `json:"name"`
+	Name  string   `json:"name,omitempty"`
 	//Node UID in graph
-	UID   string   `json:"uid"`
+	UID   string   `json:"uid,omitempty"`
 	//
-	Description string `json:"description"`
+	Description string `json:"description,omitempty"`
 	//Byte representation of node
-	Raw   []byte   `json:"raw"`
-	Links []string `json:"links"`
+	Raw   []byte   `json:"raw,omitempty"`
+	//Links []string `json:"links"`
 	//Unique resource ID
-	URID string `json:"urid"`
+	//URID string `json:"urid"`
 
-	Created time.Time `json:"created"`
-	Updated time.Time `json:"updated"`
+	Created time.Time `json:"created,omitempty"`
+	Updated time.Time `json:"updated,omitempty"`
 }
 
 func New(nodeType, name, uid string) *Node {
 	if uid == "" {
 		return 	&Node{
-			Type:    nodeType,
+			DType:    nodeType,
 			Name:    name,
 			Created: time.Now(),
 			Updated: time.Now(),
@@ -44,7 +44,7 @@ func New(nodeType, name, uid string) *Node {
 
 	return &Node{
 		UID: uid,
-		Type:    nodeType,
+		DType:    nodeType,
 		Name:    name,
 		Created: time.Now(),
 		Updated: time.Now(),
@@ -173,7 +173,7 @@ func (n *Node) Existing(db *dgo.Dgraph) (*Node, error) {
 			name 
 			uid
 			}
-			}`, n.Type, n.Name)
+			}`, n.DType, n.Name)
 	var decode struct {
 		Node []struct{
 			Name string `json:"name"`
